@@ -1,6 +1,8 @@
 package com.productManagement.service;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -14,6 +16,7 @@ import com.productManagement.dto.ProductRequest;
 import com.productManagement.exceptionHandler.ProductNotFoundException;
 import com.productManagement.model.Product;
 import com.productManagement.repository.ProductRepository;
+import com.productManagement.utils.FileHelper;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,43 +38,30 @@ public class ProductService {
 	/*-------------------------------Post Request------------------------------------*/
 
 	public ProductRequest addProduct(ProductRequest productRequest, MultipartFile file) throws Exception {
-
-//		Product product =  productRepository.save(
-//					Product.build((long) 0  ,
-//								productRequest.getName(), 
-//								productRequest.getDescription(), 
-//								productRequest.getPrice(), 
-//								productRequest.getQuantityInStock()));
 		
-		productRequest.setProductImage(PATH_URL + file.getOriginalFilename());
+		String URL = PATH_URL + file.getOriginalFilename(); 
+		
+		productRequest.setProductImage(URL);
+		file.transferTo(new File(URL));
 		Product product = productRepository.save(mapper.map(productRequest, Product.class));
-
-		file.transferTo(new File(PATH_URL+file.getOriginalFilename()));
 
 		if (product != null) {
 			log.info("Product added");
 		}
 		return productRequest;
-	}
+	 	}
 
 	/*---------------------------Get Request--------------------------------*/
 
 	public List<ProductRequest> getProductList(Integer pageNo, Integer pageSize) {
-
-//		 productRepository.findAll().forEach(product -> {
-//			 
-//			 productRequests.add(
-//					 ProductRequest.build(
-//								product.getName(), 
-//								product.getDescription(), 
-//								product.getPrice(), 
-//								product.getQuantityInStock())
-//					 );
-//		 });
-
+		
 		log.info("Getting all products.....");
-		return productRepository.findAll(PageRequest.of(pageNo - 1, pageSize)).stream()
-				.map(product -> mapper.map(product, ProductRequest.class)).collect(Collectors.toList());
+		return productRepository.findAll(
+							PageRequest.of(pageNo - 1, pageSize))
+										.stream()
+										.map(product -> mapper.map(product, ProductRequest.class))
+										.collect(Collectors.toList());
+		
 	}
 
 	public ProductRequest getProductById(Long id) {
@@ -85,21 +75,41 @@ public class ProductService {
 
 	/*---------------------------------Put Request------------------------------------*/
 
-	public ProductRequest updateProduct(ProductRequest productRequest, Long id) {
+	public ProductRequest updateProduct(ProductRequest productRequest , MultipartFile file, Long id) throws Exception {
 
+		
+		if(!file.isEmpty()) { 
+			String URL = PATH_URL+file.getOriginalFilename();
+			file.transferTo(new File(URL));
+			productRequest.setProductImage(URL);
+		}
+		
 		Product product = mapper.map(productRequest, Product.class);
+		
 		product.setId(id);
 		productRepository.save(product);
+		
 		log.info("Updating Product with id :" + id);
+		
 		return productRequest;
 	}
 
 	/*------------------------------Delete Request---------------------------------*/
 
-	public String deleteProduct(Long id) {
-		productRepository.deleteById(id);
+	public String deleteProduct(Long id) throws Exception {
+		Product product = productRepository.findById(id).orElseThrow();
+		Files.deleteIfExists(new File(product.getProductImage()).toPath());
+		
 		log.info("Deleting Product with id :" + id);
+		
 		return "Product remove with id: " + id;
+	}
+	
+	
+	/*------------------------------- Export Excel------------------------------------*/
+	
+	public ByteArrayInputStream exportInExcel() {
+		return FileHelper.exportToExcel(productRepository.findAll());
 	}
 
 }
